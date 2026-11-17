@@ -1,0 +1,71 @@
+name: Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: write   # lets the deploy jobs push to the gh-pages branch
+
+jobs:
+  # ---------- CI: runs on every push and every pull request ----------
+  ci:
+    name: CI (lint, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check .
+      - name: Unit tests
+        run: pytest -v
+      - name: Build site (once)
+        run: python -m src.site
+      - name: Save build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: site
+
+  # ---------- CD to staging: automatic = Continuous Deployment ----------
+  deploy-staging:
+    name: Deploy to staging
+    needs: ci
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: _publish/staging
+      - run: cp dashboard/index.html _publish/index.html
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_publish
+          keep_files: true          # leave production/ alone
+          commit_message: "staging: build ${{ github.run_number }}"
+
+  # ---------- CD to production: waits for a human = Continuous Delivery ----------
+  deploy-production:
+    name: Deploy to production
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production         # required reviewer is set on this environment
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site                # the SAME artifact staging got: build once, promote
+          path: _publish/production
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_publish
+          keep_files: true          # leave staging/ alone
+          commit_message: "production: build ${{ github.run_number }}"
