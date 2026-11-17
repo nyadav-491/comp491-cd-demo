@@ -4,7 +4,7 @@ import html
 import json
 import os
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 HEX_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}$")
@@ -30,7 +30,7 @@ def build_info() -> dict:
     return {
         "build": os.environ.get("GITHUB_RUN_NUMBER", "local"),
         "commit": os.environ.get("GITHUB_SHA", "local")[:7],
-        "built_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "built_at": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
     }
 
 
